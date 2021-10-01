@@ -184,22 +184,3 @@ xtabs( ~ Kyphosis + predout, kyphosis3)
 ```
 
 When kyphosis is actually present, the probability that this model would predict a present outcome is 41.18%. The name for this characteristic of the test is sensitivity.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
