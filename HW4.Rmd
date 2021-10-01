@@ -1,0 +1,167 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+4.
+(a).
+```{r}
+library(faraway)
+data(gala)
+gala=gala[,-2]
+modp=glm(Species~.,family=poisson,gala)
+summary(modp)
+```
+The values of the coefficients and the deviance are in the table above.
+
+(b).
+```{r}
+mu <- as.vector(matrix(mean(gala$Species),nrow=30))
+eta <- log(mu)
+z <- eta + (gala$Species - mu)/mu
+var_mu <- mu/30
+w <- 1/((1/mu)^2*var_mu)
+w <- c(w)
+```
+The adjusted dependent variable is log(mu) + (Y-mu)/mu
+
+(c).
+```{r}
+lmod=lm(z~Area + Elevation + Nearest + Scruz + Adjacent, weights=w, gala)
+sumary(lmod)
+```
+The coefficients are close to those of the GLM fit, though they are not exactly the same.
+
+(d).
+```{r}
+eta=lmod$fit
+mu=exp(eta)
+z <- eta + (gala$Species - mu)/mu
+w=30*mu
+lmod=lm(z~Area + Elevation + Nearest + Scruz + Adjacent, weights=w, gala)
+sumary(lmod)
+deviance <- 2*sum(gala$Species*log(gala$Species/mu)-gala$Species+mu)
+deviance
+```
+The deviance is not very close to the deviance of the GLM.
+
+(e).
+```{r}
+eta=lmod$fit
+mu=exp(eta)
+z <- eta + (gala$Species - mu)/mu
+w=30*mu
+lmod=lm(z~Area + Elevation + Nearest + Scruz + Adjacent, weights=w, gala)
+summary(lmod)
+deviance <- 2*sum(gala$Species*log(gala$Species/mu)-gala$Species+mu)
+deviance
+```
+The coefficients and deviance are closer to those of the GLM compared to the first iteration.
+
+(f).
+```{r}
+for(iter in 1:5){
+  eta=lmod$fit
+  mu=exp(eta)
+  z <- eta + (gala$Species - mu)/mu
+  w=30*mu
+  lmod=lm(z~Area + Elevation + Nearest + Scruz + Adjacent, weights=w, gala)
+  deviance <- 2*sum(gala$Species*log(gala$Species/mu)-gala$Species+mu)
+  cat(iter,coef(lmod), deviance,"\n")
+}
+summary(lmod)
+```
+The estimated coefficients are the same with the GLM fit, but the standard errors and the p-values are different.
+
+(g).
+```{r}
+summary(lmod)$coef[,2]/summary(lmod)$sigma
+```
+The standard errors are still not exactly the same with the GLM fit, but they are better compared with the linear model.
+
+6.
+(a).
+```{r}
+data(worldcup)
+wcsub <- subset(worldcup, Position != "Goalkeeper")
+wcsub$TacklesPerGame <- wcsub$Tackles/(wcsub$Time/90)
+wcsub$PassesPerGame <- wcsub$Passes/(wcsub$Time/90)
+wcsub$ShotsPerGame <- wcsub$Shots/(wcsub$Time/90)
+
+wcmod = glm(Shots ~ offset(log(Time))+Team+Position+TacklesPerGame+PassesPerGame, family=poisson, wcsub)
+summary(wcmod)
+```
+Tackles have a significant negative effect on the number of shots, and the number of passes per game is positively related to the number of shots, but its effect is not significant at any level.
+
+(b).
+```{r}
+head(sort(influence(wcmod)$hat, decreasing=TRUE), n=20)
+```
+Villa has the highest leverage, possibly because this player has a large number of shots and a relatively small number of  passes. 
+
+```{r}
+halfnorm(influence(wcmod)$hat)
+```
+The plot suggests that observation 405 and 525 may have high leverages.
+
+(c).
+```{r}
+head(influence(wcmod)$coef[,35:36], n=20)
+```
+```{r}
+head(sort(abs(influence(wcmod)$coef[,35]-wcmod$coef[35]), decreasing=TRUE), n=10)
+```
+BoatengGh causes the greatest absolute change in the tackle coefficient. This player has a large number of passes per game as well as the number of shots.
+```{r}
+plot(abs(influence(wcmod)$coef[,35]-wcmod$coef[35]), xlab="Player", ylab="Change in the tackle coefficient")
+```
+There are a few players with large values of the changes in the Tackles coefficient, which correspond to BoatengGh, Xavi, Salcido and etc.. 
+
+(d).
+```{r}
+head(sort(cooks.distance(wcmod), decreasing = TRUE), n=20)
+```
+Dempsey has the largest Cook Statistics. This player has a large number of shots as a midfielder with a small number of tackles and passes per game.
+
+(e).
+```{r}
+head(sort(abs(rstudent(wcmod)), decreasing = TRUE), n=20)
+```
+GonzalezC has the largest absolute jacknife residual. This player has a large number of shots as a midfielder with a small number of tackles and passes per game.
+
+(f).
+```{r}
+plot(residuals(wcmod)~predict(wcmod,type='link'),xlab=expression(hat(eta)),ylab='Deviance Residuals')
+```
+The plot is deviance residuals vs. the predicted values using the link function of Poisson. The lines of points arise from the Poisson regression where Y's are discrete count variables. Linearity and constant Variance are violated, meaning that the model is not well specified.
+
+(g).
+```{r}
+plot(Shots ~ Tackles, wcsub)
+plot(ShotsPerGame ~ TacklesPerGame, wcsub)
+mu_wc <- predict(wcmod, type = "response")
+z_wc <- predict(wcmod)+(wcsub$Shots - mu_wc)/mu_wc
+plot(z_wc~wcsub$TacklesPerGame, xlab="Tackles per game", ylab="Linearized response")
+```
+All plots show a negative relationship between shots and tackles, but not in a clear linear form. Plot 1 shows some discrete points, while in plot 2, the points are more clustered in the bottom left corner. Compared with the other 2 plots, plot 3 shows a clearer relationship between the two variables, and it is less clustered than plot 2, so plot 3 would be the best one for discovering the
+relationship between this predictor and the response.
+
+(h).
+```{r}
+u <- predict(wcmod)+(wcsub$Shots - mu_wc)/mu_wc + coef(wcmod)[35]*wcsub$TacklesPerGame
+plot(u ~ TacklesPerGame, wcsub, ylab='Partial Residual')
+abline(0,coef(wcmod)[35])
+```
+The plot does not show a clear linear relationship, and most points are clustered, which is troublesome for further interpretation. The point on the far right is influential because it has a high leverage.
+
+(i).
+```{r}
+plot(z_wc~predict(wcmod),xlab='Linear Predictor', ylab='Linearized Response')
+```
+The plot shows clear curvatures, which implies the link function may be misspecified.
+
+
+
+

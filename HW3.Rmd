@@ -1,0 +1,205 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+2. Pima
+```{r}
+library(faraway)
+data(pima)
+```
+
+(a).
+```{r}
+library(ggplot2)
+pima$test_factor <- ifelse(pima$test == 0, "no", "yes")
+ggplot(pima, aes(x=insulin, color=test_factor, fill = test_factor)) + geom_histogram(position="dodge", binwidth=50, aes(y=..density..))
+```
+There are a number of observations with insulin = 0, which is impossible since people's insulin level cannot be 0.
+
+(b).
+```{r}
+pima$ins_mod <- ifelse(pima$insulin == 0, NA, pima$insulin)
+ggplot(pima, aes(x=ins_mod, color=test_factor, fill = test_factor)) + geom_histogram(position="dodge", binwidth=50, aes(y=..density..))
+```
+The plot shows that the distribution of insulin is right skewed for people both testing positive and negative, and people testing positive tend to have more insulin than people testing negative.
+
+(c).
+```{r}
+pima$glu_mod <- ifelse(pima$glucose == 0, NA, pima$glucose)
+pima$dias_mod <- ifelse(pima$diastolic == 0, NA, pima$diastolic)
+pima$tri_mod <- ifelse(pima$triceps == 0, NA, pima$triceps)
+pima$bmi_mod <- ifelse(pima$bmi == 0, NA, pima$bmi)
+
+lmod1 <- glm(test ~ pregnant + glu_mod + dias_mod + tri_mod + ins_mod + bmi_mod + diabetes + age, family = binomial, pima)
+
+sumary(lmod1)
+```
+392 observations were used in the model fitting. It is because incredible observations were deleted.
+
+(d).
+```{r}
+lmod2 <- glm(test ~ pregnant + glu_mod + dias_mod + bmi_mod + diabetes + age, family = binomial, pima)
+sumary(lmod2)
+
+1 - pchisq(summary(lmod2)$deviance - summary(lmod1)$deviance, summary(lmod2)$df.residual - summary(lmod1)$df.residual)
+```
+724 observations were used in fitting this model. I used a chi-square test, and the p-value = 0.57, meaning that insulin and triceps are not significant in this model.
+
+(e).
+```{r}
+lmod3 <- glm(test ~ pregnant + glu_mod + dias_mod + tri_mod + ins_mod + bmi_mod + diabetes + age, family = binomial, data=lmod1$model)
+lmodr <- step(lmod3, trace = 0)
+sumary(lmodr)
+```
+Selected predictors: pregnant, glucose, bmi, diabetes and age. 392 observations were used.
+
+(f).
+```{r}
+pima$missing <- ifelse(pima$insulin == 0 | pima$glucose == 0 | pima$diastolic == 0 | pima$triceps == 0 | pima$bmi == 0, 1, 0)
+xtabs(~ test + missing, pima)
+cor(pima$test, pima$missing)
+sumary(glm(test ~ missing, family = binomial, data = pima))
+```
+The model summary shows that we fail to reject the null hypothesis that the "missing" predictor is not significant, which means that missingness is not associated with the test result.
+
+```{r}
+lmod4 <- glm(test ~ pregnant + glucose + bmi + diabetes + age + insulin + missing, family = binomial, data = pima)
+sumary(lmod4)
+```
+It is appropriate to perform this regression because observations with missing values are included by accounting for the potential correlation between whether one has missing values and the test results.
+
+(g).
+```{r}
+exp(lmod4$coefficients)
+summary(pima$bmi_mod)
+```
+```{r}
+exp(lmod4$coefficients[4]*(36.60 - 27.50))
+```
+There is a 111.04% increase in the odds of testing positive for diabetes for a woman with a BMI at the first
+quartile compared with a woman at the third quartile.
+```{r message=FALSE}
+confint(lmod4)
+```
+```{r}
+exp(0.055327176*(36.60 - 27.50))
+exp(0.110268013*(36.60 - 27.50))
+```
+A 95% confidence interval for this odd difference is (1.65, 2.73).
+
+(h).
+```{r}
+sumary(glm(test ~ dias_mod, family = binomial, data = pima))
+```
+Women who test positive have higher diastolic blood pressures: the coefficient is significantly positive. While in the original model, it is not significant, which might be due to multicollinearity between the diastolic blood pressure and BMI or other predictors.
+
+
+
+3. Kyphosis
+```{r}
+data(kyphosis,package="rpart")
+```
+
+(a).
+```{r}
+ggplot(kyphosis, aes(x = Age, y = Number)) + geom_point(alpha = 0.2, position = position_jitter()) + facet_grid(~ Kyphosis)
+ggplot(kyphosis, aes(x = Age, y = Start)) + geom_point(alpha = 0.2, position = position_jitter()) + facet_grid(~ Kyphosis)
+```
+Age does not appear to be related to kyphosis. The number of vertebrae involved also seems random and unassociated with kyphosis. The number of the first vertebra operated on appears to be negatively related to kyphosis, i.e., people are less likely to have kyphosis if the number of the first vertebra operated on is small.
+
+(b).
+```{r}
+kyphosis$kyp <- ifelse(kyphosis$Kyphosis == "absent", 0, 1)
+mod1 <- glm(kyp ~ Age + Number + Start, family = binomial, kyphosis)
+summary(mod1)
+```
+```{r}
+predprob <- predict(mod1, type = "response")
+linpred <- predict(mod1)
+rawres <- kyphosis$kyp - predprob
+plot(rawres ~ linpred, xlab = "Linear Predictor", ylab = "Deviance Residuals")
+```
+This plot is not helpful since that the residual can only take two values given a fixed linear predictor and whether variance is equal is unknown from this plot.
+
+(c).
+```{r message = FALSE}
+library(dplyr)
+kyphosis1 <- mutate(kyphosis, residuals = residuals(mod1), linpred = predict(mod1))
+gdf1 <- group_by(kyphosis1, cut(linpred, breaks = unique(quantile(linpred, (1:20)/21))))
+diagdf1 <- summarise(gdf1, residuals = mean(residuals), linpred = mean(linpred))
+plot(residuals ~ linpred, diagdf1, xlab = 'Linear Predictor', pch = 20)
+```
+The plot shows an even variation as the linear predictor varies, so it reveals no inadequacy in the model.
+
+(d).
+```{r message = FALSE}
+gdf2 <- group_by(kyphosis1, Start)
+diagdf2 <- summarise(gdf2, residuals = mean(residuals))
+ggplot(diagdf2, aes(x = Start, y = residuals)) + geom_point()
+```
+The variances are approximately equal except that there is a potential outlier with a large residual around Start = 8.
+
+(e).
+```{r}
+qqnorm(residuals(mod1))
+```
+The plot does not have a desired linear shape because there are two clusters of points corresponding to kyphosis = 0 and kyphosis = 1.
+
+(f).
+```{r}
+halfnorm(hatvalues(mod1))
+```
+The half-normal plot is roughly linear with some curvatures and two observations with large leverages (53 and 24).
+
+(g).
+```{r}
+kyphosis2 <- mutate(kyphosis, predprob = predict(mod1, type = "response"))
+gdf3 <- group_by(kyphosis2, cut(linpred, breaks = unique(quantile(linpred, (1:20)/21))))
+hldf <- summarise(gdf3, y=sum(kyp), ppred=mean(predprob),count=n())
+hldf <- mutate(hldf, se.fit = sqrt(ppred*(1-ppred)/count))
+ggplot(hldf, aes(x = ppred, y = y/count, ymin = y/count - 2*se.fit, ymax = y/count+2*se.fit)) + geom_point() + 
+geom_linerange(color = grey(0.75)) + geom_abline(intercept = 0, slope = 1) + xlab('Predicted Probability') + 
+ylab("Observed Proportion")
+```
+The linear relationship between predicted probability and observed proportion is not very clear, the variance is not constant, and there exist a possible outlier such as the one with the predicted probability around 0.6.
+
+```{r}
+hlstat = with(hldf, sum((y-count*ppred)^2/(count*ppred*(1-ppred))))
+c(hlstat, nrow(hldf))
+
+pchisq(16.84134, 18, lower.tail = F)
+```
+The p-value is 0.53, which means that it's not statistically significant and there is no lack of fit.
+
+(h).
+```{r}
+kyphosis3 = mutate(kyphosis, predout = ifelse(predprob<0.5,"no","yes"))
+xtabs( ~ Kyphosis + predout, kyphosis3)
+```
+```{r}
+7/17
+```
+
+When kyphosis is actually present, the probability that this model would predict a present outcome is 41.18%. The name for this characteristic of the test is sensitivity.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,67 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r}
+ProportionNotReturned <- read.csv("C:/Users/j/Desktop/2021 Fall/STOR 557/ProportionNotReturned.csv")
+```
+
+1.
+```{r}
+wts=as.numeric(ProportionNotReturned$PNR<0.1)
+
+Model1 = lm(PNR ~ Pop + Rural + MedAge + Travel + Hsgrad + Collgrad + MedInc + Black + Hisp, data = ProportionNotReturned, weights = wts)
+summary(Model1)
+```
+Backward elimination:
+```{r}
+MSE = (summary(Model1)$sigma)^2
+step(Model1, scale=MSE)
+```
+
+Forward selection:
+```{r}
+none = lm(PNR~1, data=ProportionNotReturned, weights = wts)
+step(none, scope=list(upper=Model1), scale=MSE, direction="forward")
+```
+
+Stepwise regression:
+```{r}
+step(none, scope=list(upper=Model1), scale=MSE)
+```
+```{r}
+Model2 = lm(PNR ~ Black + Pop + Travel + Hsgrad, data = ProportionNotReturned, weights = wts)
+summary(Model2)
+```
+Final linear model: PNR ~ Black + Pop + Travel + Hsgrad. Backward elimination, forward selection and stepwise regression were used to select variables, and forward selection and stepwise regression returned the same model with the same Mallow's Cp (1.5611).
+
+```{r}
+plot(Model2, 1:2)
+```
+Measures of fit: 1)linearity: satisfied; 2)zero mean: the distribution of the errors is centered at zero.; 3)constant variance: not satisfied, because there is a fan shaped pattern in the residuals vs fitted plot; 4)independence: satisfied, because there is no relationships among errors in the residuals vs fitted plot; 5)normality: not satisfied, because there is clear skewness in normal Q-Q plot, which means that residuals are not normally distributed.
+
+2.
+```{r}
+pr=predict(Model2,se.fit=T,interval='prediction',level=0.99,weights=1)
+
+pr$fit[c(9,78),]
+```
+The prediction interval for Bladen is (0.001, 0.034), and the prediction interval for Robeson is (-0.002, 0.032).
+
+3.
+In Bladen county the actual PNR was 0.113, and the upper bound of the 99% prediction interval for Bladen county was 0.034, then the excess PNR would be 0.079 (0.113 - 0.034). In Robeson county the actual PNR was 0.110, and the upper bound of the 99% prediction interval for Robeson county was 0.032, then the excess PNR would be 0.078 (0.110 - 0.032).
+
+4.
+The number of absentee ballots in Bladen that are unaccounted for is around 640.69 (8110 * 0.079). The number of absentee ballots in Robeson that are accounted for is around 1253.38 (16069 * 0.078). So the total number of absentee ballots that are unaccounted for is about 1894.07 (640.69 + 1253.38).
+
+5.
+The analysis does not support that conclusion, because the number of potentially missing votes has a 99% percent chance of being at least 1894, which is greater than 905. 
+
+
+

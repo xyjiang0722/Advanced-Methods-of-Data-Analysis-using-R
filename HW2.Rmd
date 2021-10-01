@@ -1,0 +1,170 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+1. Rock
+
+```{r}
+library(faraway)
+data(rock)
+```
+
+(1). Initial data analysis
+```{r}
+summary(rock)
+```
+All variables are numerical and positive.
+
+```{r}
+hist(rock$perm, main="Perm", xlab="Perm")
+```
+
+```{r}
+plot(density(rock$perm), main="Perm")
+rug(rock$perm)
+```
+The histogram and the density estimate show that perm is highly right-skewed.
+
+(2). Variable selection
+Initial model:
+```{r}
+rocklmod1 = lm(perm ~ area + peri + shape, rock)
+summary(rocklmod1)
+```
+
+Backward elimination:
+```{r}
+MSE1 = (summary(rocklmod1)$sigma)^2
+step(rocklmod1, scale=MSE1)
+```
+Forward selection:
+```{r}
+none1 = lm(perm~1, rock)
+step(none1, scope=list(upper=rocklmod1), scale=MSE1, direction="forward")
+```
+Both backward elimination and forward selection return the same linear model with the same Mallow's Cp (4.00).Best model: perm ~ peri + area + shape.
+
+(3). Transformation
+```{r}
+rocklmod2 = lm(log(perm) ~ area + peri + shape, rock)
+summary(rocklmod2)
+```
+I use log(perm) since perm is highly right-skewed. R-squared improves from 0.7044 to 0.7483. 
+
+(4).Diagnostics
+```{r}
+plot(rocklmod2)
+```
+From plot 1, linearity is violated because the residuals show a curvilinear trend. Variance is roughly constant expect for some large residuals. From plot 2, residuals are roughly normally distributed except that tehre exists a long-tailed error.
+
+```{r}
+2*(2/48)
+head(sort(hatvalues(rocklmod2),decreasing=TRUE),n=16)
+```
+15 observations have large leverages.
+
+
+```{r}
+head(sort(cooks.distance(rocklmod2),decreasing=TRUE),n=7)
+```
+6 observations have a large cooks distance.
+
+(5). Predictions
+```{r}
+new1 = data.frame(area=10000, peri=4000, shape=0.3)
+exp(predict.lm(rocklmod2, new1, interval="prediction", level=0.99))
+```
+Suppose area=10000, peri=4000, shape=0.3. The predicted perm is 99.83 with a 99% prediction interval (9.11, 1093.53).
+
+(6).Interpretation
+Area and peri have positive and negative effects on perm respectively, and they are significant at a 1% level. Shape is not significant.
+
+
+
+2. Prostate
+
+```{r}
+data(prostate)
+```
+
+(1). Initial data analysis
+```{r}
+summary(prostate)
+```
+All variables are numerical expect svi which is binary.
+
+```{r}
+hist(prostate$lpsa, main="Prostate specific antigen", xlab="log(prostate specific antigen)")
+```
+
+```{r}
+plot(density(prostate$lpsa), main="Prostate specific antigen")
+rug(prostate$lpsa)
+```
+The histogram and the density estimate show that lpsa is roughly not skewed.
+
+```{r}
+boxplot(lpsa ~ svi, prostate, xlab="", las=3)
+```
+The bosplot suggests lpsa is higher if svi=1, and there is a potential outlier in the group where svi=0.
+
+(2). Variable selection
+Initial model:
+```{r}
+prostatelmod1 = lm(lpsa ~ lcavol+lweight+age+lbph+svi+lcp+gleason+pgg45, prostate)
+summary(prostatelmod1)
+```
+
+Backward elimination:
+```{r}
+MSE2 = (summary(prostatelmod1)$sigma)^2
+step(prostatelmod1, scale=MSE2)
+```
+Forward selection:
+```{r}
+none2 = lm(lpsa~1, prostate)
+step(none2, scope=list(upper=prostatelmod1), scale=MSE2, direction="forward")
+```
+Both backward elimination and forward selection return the same linear model with the same Mallow's Cp (5.63).Best model: lpsa ~ lcavol + lweight + svi + lbph.
+
+(3). Transformation
+```{r}
+prostatelmod2 = lm(lpsa ~ lcavol + lweight + svi + lbph, prostate)
+summary(prostatelmod2)
+```
+I did not use any transformation since the original variables are already log transformed. 
+
+(4).Diagnostics
+```{r}
+plot(prostatelmod2)
+```
+From plot 1, linearity is satisfied because the residuals fitted line seems flat. Variance is roughly constant expect for some large residuals. From plot 2, residuals are roughly normally distributed except that tehre exists a long-tailed error.
+
+```{r}
+2*(2/97)
+head(sort(hatvalues(prostatelmod2),decreasing=TRUE),n=50)
+```
+More than half of the observations have large leverages.
+
+
+```{r}
+head(sort(cooks.distance(prostatelmod2),decreasing=TRUE),n=7)
+```
+6 observations have a large cooks distance.
+
+(5). Predictions
+```{r}
+new2 = data.frame(lcavol=0.75, lweight=3, svi=0, lbph=-1)
+predict.lm(prostatelmod2, new2, interval="prediction", level=0.99)
+```
+Suppose lcavol=0.75, lweight=3, svi=0, lbph=-1. The predicted lpsa is 1.64 with a 99% prediction interval (-0.26, 3.54).
+
+(6).Interpretation
+```{r}
+summary(prostatelmod2)
+```
+Log(cancer volume) has a significnatly positive effect (0.55) on log(prostate specific antigen). Log(prostate weight) and seminal vesicle invasion also have positive effects (0.39 and 0.71 respectively), but their significance level is 0.05 and 0.01. Log(benign prostatic hyperplasia amount) does not show a significant effect.
+
