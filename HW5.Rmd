@@ -1,0 +1,137 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+2. 
+```{r}
+library(faraway)
+data(salmonella)
+```
+
+(a).
+```{r}
+plot(salmonella$dose, salmonella$colonies)
+```
+There is not a clear linear relationship or nonlinear curvature between dose and colonies, and there is an outlier at dose = 100. it is possible to find a transformation of the dose predictor that results in a Poisson model that does fit the data.
+
+(b).
+```{r}
+means <- sapply(split(salmonella$colonies, factor(salmonella$dose)), mean)
+means
+vars <- sapply(split(salmonella$colonies, factor(salmonella$dose)), var)
+vars
+plot(means, vars)
+abline(0,1)
+```
+The variance is larger than the mean, which implies the issue of overdispersion.
+
+(c).
+```{r}
+mod1 = glm(colonies ~ factor(dose), family = poisson, data = salmonella)
+summary(mod1)
+
+pchisq(deviance(mod1),df.residual(mod1), lower=F)
+```
+The residual deviance is 33.496 on 12 degrees of freedom, and based on the chi-squared test, the model is well fitted.
+
+(d).
+```{r}
+halfnorm(residuals(mod1))
+```
+The points are approximately on a straight line, so it shows no outlier.
+
+(e).
+```{r}
+mod2 <- glm(colonies ~ I(dose^2), family = quasipoisson, data = salmonella)
+summary(mod2)
+1 - pchisq(deviance(mod2),df.residual(mod2), lower=F)
+```
+By the chi-square test of the deviance, it is not statistically significant and the fit is adequate.
+
+(f).
+```{r}
+plot(mod2,1)
+```
+Constant variance is violated, which implies the issue of overdispersion since the nonconstant variance can be larger than the means.
+
+(g).
+```{r}
+fitted_mean_response <- predict(mod2, type="response")
+plot(salmonella$dose, fitted_mean_response)
+```
+
+(h).
+```{r}
+new <- data.frame(dose = 500)
+prediction <- predict(mod2, new, type="response", se.fit=TRUE)
+lwb <- prediction[[1]] - 1.96 * prediction[[2]]
+upb <- prediction[[1]] + 1.96 * prediction[[2]]
+lwb
+upb
+```
+The 95% confidence interval for the predicted mean response for a dose of 500 is (23.47, 34.98).
+
+(i).
+The maximum predicted response occurs at dose = 1000.
+
+
+4. 
+```{r}
+data(africa)
+```
+
+(a).
+```{r}
+plot(miltcoup~., africa)
+```
+
+(b).
+```{r}
+mod3 = glm(miltcoup ~ ., family = poisson, data = africa)
+mod4 = glm(miltcoup ~ ., family = poisson, data = mod3$model)
+mod5 <- step(mod4, trace=0)
+summary(mod5)
+```
+Final model: miltcoup ~ oligarchy + pollib + parties. Observations with missing values are deleted.
+
+(c).
+```{r}
+summary(mod5)
+1 - pchisq(deviance(mod5),df.residual(mod5), lower=F)
+```
+By the chi-square test of the deviance, it is not statistically significant and there is no lack of fit.
+
+(d).
+```{r}
+halfnorm(residuals(mod5))
+plot(mod5, 1)
+```
+The QQ plot of the residuals suggests that the residuals are roughly normally distributed except two potential outliers, observation 8 and 9. Residuals vs. fitted plot shoes that the assumption of constant variance is violated. The lines of points observed on this plot comes from the fact that the response is a count variable, i.e., it takes integer values. 
+
+(e).
+The coefficients of this plot suggests that the nonconstant variance implyes that potential issue of overdispersion where the variances aer proportional to but larger than the means.
+
+(f).
+```{r}
+table(africa$miltcoup)
+predict(mod5, type="response")
+```
+
+```{r}
+M <- as.table(rbind(c(0,1,2,3,4,5,6), c(18,14,6,3,1,3,2)))
+chisq.test(M)
+```
+By the chi square test, the number of coups and the corresponding number of countries are statistically significantly associated, so there is not enough evidence of excess of countries with zero coups.
+
+
+
+
+
+
+
+
+
+
