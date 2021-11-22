@@ -1,0 +1,336 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+Name: Xiaoyan Jiang
+
+1.
+```{r}
+library(faraway)
+data(denim)
+library(INLA)
+library(ggplot2)
+```
+
+(a).
+```{r}
+plot(waste~supplier, denim)
+```
+There is an overall upward trend in waste from supplier 1 to supplier 5. Supplier 2 and 5 have larger variances within each group. Supplier 1 and 2 have more potential outliers compared with other suppliers.
+
+(b).
+```{r}
+formula <- waste ~ f(supplier, model="iid")
+result <- inla(formula, data=denim)
+summary(result)
+```
+```{r}
+sigmaalpha <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[2]])
+sigmaepsilon <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[1]])
+ddf <- data.frame(rbind(sigmaalpha,sigmaepsilon),errterm=gl(2,2048,labels = c("alpha","epsilon")))
+ggplot(ddf, aes(x,y, linetype=errterm))+geom_line()+xlab("waste")+ylab("density")+xlim(0,13)
+```
+The intercept (fixed effects) is 6.977. The posterior mean for the standard deviation of epsilon is 10(1/sqrt(1*10^(-2)). The precision for the supplier term is 1.6*10^4, i.e., the posterior mean for the standard deviation of supplier is close to 0, which is also suggested by the plot of the density of waste. But from question (a), it is unlikely that the supplier random effect has little variation.
+
+(c).
+```{r}
+sdres <- sd(denim$waste)
+pcprior <- list(prec = list(prior="pc.prec", param = c(3*sdres,0.01)))
+formula <- waste ~ f(supplier, model="iid", hyper = pcprior)
+result <- inla(formula, family="gaussian", data=denim)
+result <- inla.hyperpar(result)
+summary(result)
+```
+
+```{r}
+sigmaalpha <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[2]])
+sigmaepsilon <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[1]])
+ddf <- data.frame(rbind(sigmaalpha,sigmaepsilon),errterm=gl(2,2048,labels = c("alpha","epsilon")))
+ggplot(ddf, aes(x,y, linetype=errterm))+geom_line()+xlab("waste")+ylab("density")+xlim(0,20)
+```
+The more informative prior is a penalized complexity prior. The plot shows that the supplier random effect has larger variation while epsilon is more centered around 10, which is plausible compared with the plot in question (a).
+
+(d).
+```{r}
+restab <- sapply(result$marginals.fixed, function(x) inla.zmarginal(x,silent=TRUE))
+restab <- cbind(restab, inla.zmarginal(sigmaalpha,silent=TRUE))
+restab <- cbind(restab, inla.zmarginal(sigmaepsilon,silent=TRUE))
+restab <- cbind(restab, sapply(result$marginals.random$supplier,function(x) inla.zmarginal(x, silent=TRUE)))
+colnames(restab) = c("mu","alpha","epsilon",levels(denim$supplier))
+restab
+```
+
+(e).
+```{r}
+summary(result)
+```
+
+```{r}
+1/sqrt(0.008)
+1/sqrt(0.014)
+1/sqrt(0.025)
+1/sqrt(206.263)
+```
+The 95% credible interval for the SD of epsilon is [8.45, 11.18]. The 95% credible interval for the SD of supplier is [0.07, 6.32]. 
+
+```{r}
+1/sqrt(0.010)
+1/sqrt(0.053)
+```
+The posterior modes for the error and supplier SDs are 10 and 4.34 respectively. 
+
+```{r}
+1/sqrt(0.011)
+1/sqrt(7.15*10^5)
+```
+The posterior means for the error and supplier SDs are 9.53 and 0.00 respectively. 
+The posterior modes are larger than posterior means, possibly because the prior put more weight on sd=0.
+
+(f).
+```{r}
+z_scores <- abs(denim$waste-mean(denim$waste))/sd(denim$waste)
+sort(z_scores, TRUE)[1]
+sort(z_scores, TRUE)[2]
+```
+```{r}
+6.390664*sd(denim$waste)+mean(denim$waste)
+3.610935*sd(denim$waste)+mean(denim$waste)
+sort(denim$waste, TRUE)[1]
+sort(denim$waste, TRUE)[2]
+```
+```{r}
+denim2 <- subset(denim, (waste!=70.2 & waste!=42.7))
+```
+
+
+```{r}
+plot(waste~supplier, denim2)
+```
+There is an overall upward trend in waste from supplier 1 to supplier 5. Supplier 3 and 5 have larger variances within each group. Supplier 1 and 2 have more potential outliers compared with other suppliers.
+
+```{r}
+formula <- waste ~ f(supplier, model="iid")
+result <- inla(formula, data=denim2)
+summary(result)
+```
+```{r}
+sigmaalpha <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[2]])
+sigmaepsilon <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[1]])
+ddf <- data.frame(rbind(sigmaalpha,sigmaepsilon),errterm=gl(2,2048,labels = c("alpha","epsilon")))
+ggplot(ddf, aes(x,y, linetype=errterm))+geom_line()+xlab("waste")+ylab("density")+xlim(0,9)
+```
+The intercept (fixed effects) is 5.913. The posterior mean for the standard deviation of epsilon is (1/sqrt(0.025)). The precision for the supplier term is 1.86*10^4, i.e., the posterior mean for the standard deviation of supplier is close to 0, which is also suggested by the plot of the density of waste. But from the previous plot, it is unlikely that the supplier random effect has little variation.
+
+```{r}
+sdres <- sd(denim2$waste)
+pcprior <- list(prec = list(prior="pc.prec", param = c(3*sdres,0.01)))
+formula <- waste ~ f(supplier, model="iid", hyper = pcprior)
+result <- inla(formula, family="gaussian", data=denim2)
+result <- inla.hyperpar(result)
+summary(result)
+```
+
+```{r}
+sigmaalpha <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[2]])
+sigmaepsilon <- inla.tmarginal(function(x) 1/sqrt(exp(x)),result$internal.marginals.hyperpar[[1]])
+ddf <- data.frame(rbind(sigmaalpha,sigmaepsilon),errterm=gl(2,2048,labels = c("alpha","epsilon")))
+ggplot(ddf, aes(x,y, linetype=errterm))+geom_line()+xlab("waste")+ylab("density")+xlim(0,20)
+```
+The more informative prior is a penalized complexity prior. The plot shows that supplier random effect has larger variation while epsilon is more centered around 6, which is plausible compared with the previous plot.
+
+```{r}
+restab <- sapply(result$marginals.fixed, function(x) inla.zmarginal(x,silent=TRUE))
+restab <- cbind(restab, inla.zmarginal(sigmaalpha,silent=TRUE))
+restab <- cbind(restab, inla.zmarginal(sigmaepsilon,silent=TRUE))
+restab <- cbind(restab, sapply(result$marginals.random$supplier,function(x) inla.zmarginal(x, silent=TRUE)))
+colnames(restab) = c("mu","alpha","epsilon",levels(denim$supplier))
+restab
+```
+
+(e).
+```{r}
+summary(result)
+```
+
+```{r}
+1/sqrt(0.020)
+1/sqrt(0.036)
+1/sqrt(0.021)
+1/sqrt(4.776)
+```
+The 95% credible interval for the SD of epsilon is [5.27, 7.07]. The 95% credible interval for the SD of supplier is [0.46, 6.90]. 
+
+```{r}
+1/sqrt(0.027)
+1/sqrt(0.060)
+```
+The posterior modes for the error and supplier SDs are 6.09 and 4.08 respectively. 
+
+```{r}
+1/sqrt(0.027)
+1/sqrt(5687.985)
+```
+The posterior means for the error and supplier SDs are 6.09 and 0.01 respectively. 
+The posterior mode of the error is the same as its posterior mean, and the posterior mode of the supplier is still larger than its posterior mean, but the difference is smaller compared with the previous example. This indicates that removing the two outliers improves the fit of the model.
+
+
+
+2.
+```{r}
+library(faraway)
+data(denim)
+library(rstan)
+```
+
+(a).
+```{r}
+denimdata <- list(N=95, J=5, response=denim$waste, predictor=as.numeric(denim$supplier))
+fit <- stan(file = "C:/Users/j/Desktop/2021 Fall/STOR 557/oneway.stan", data = denimdata)
+```
+
+```{r}
+traceplot(fit, pars="mu", inc_warmup = TRUE)
+traceplot(fit, pars="sigmaalpha", inc_warmup = TRUE)
+traceplot(fit, pars="sigmaepsilon", inc_warmup = TRUE)
+```
+The plots for mu and sigma alpha show clear fluctuation and the MCMCs do not converge. The plot for sigma epsilon shows the convergence of the MCMC.
+
+(b).
+```{r}
+fit
+```
+The posterior mean for mu is 6.93, the 95% credible interval is (1.78, 10.74), and the effective sample size is 175. The posterior mean for sigma alpha is 2.65, the 95% credible interval is (0.11, 9.05), and the effective sample size is 258. The posterior mean for sigma alpha is 9.97, the 95% credible interval is (8.55, 11.63), and the effective sample size is 689. 
+
+(c).
+```{r}
+library(reshape2)
+library(ggplot2)
+postsig <- extract(fit, pars=c("sigmaalpha","sigmaepsilon"))
+ref <- melt(postsig,value.name="waste")
+ggplot(data=ref,aes(x=waste, linetype=L1)) + geom_density()+xlim(0,15)+scale_linetype(name="SD",labels=c("supplier","error"))
+```
+The SD of supplier shows larger variation than the SD of error. 
+
+```{r}
+mean(postsig$sigmaalpha > postsig$sigmaepsilon)
+
+```
+The probability that the supplier SD is bigger than the error SD is 0.022.
+
+(d).
+```{r}
+supp <- rstan::extract(fit, pars="a")
+ref <- melt(supp, value.name="waste")
+ggplot(data=ref,aes(x=waste, linetype=factor(Var2)))+geom_density()+scale_linetype(name="waste",labels=LETTERS[1:5])
+```
+Supplier E tends to produce the most waste and supplier A tends to produce the least.
+
+```{r}
+mean(ref[ref[,2]==5,3]>ref[ref[,2]==1,3])
+```
+The probability that the best supplier is better than the worst supplier is 0.80925.
+
+(e).
+```{r}
+plot(denim$waste)
+```
+Clearly, the one with waste = 70.2 and the one with waste = 42.7 are outliers.
+
+```{r}
+denim2 <- subset(denim, (waste!=70.2 & waste!=42.7))
+```
+
+```{r}
+denimdata <- list(N=93, J=5, response=denim2$waste, predictor=as.numeric(denim2$supplier))
+fit2 <- stan(file = "C:/Users/j/Desktop/2021 Fall/STOR 557/oneway.stan", data = denimdata)
+```
+
+```{r}
+traceplot(fit2, pars="mu", inc_warmup = TRUE)
+traceplot(fit2, pars="sigmaalpha", inc_warmup = TRUE)
+traceplot(fit2, pars="sigmaepsilon", inc_warmup = TRUE)
+```
+The plots for mu shows the convergence of the MCMC.
+
+```{r}
+fit2
+```
+Sigma alpha has a larger sd and sigma epsilon has a smaller sd compared with the full data.
+
+```{r}
+postsig <- extract(fit2, pars=c("sigmaalpha","sigmaepsilon"))
+ref <- melt(postsig,value.name="waste")
+ggplot(data=ref,aes(x=waste, linetype=L1)) + geom_density()+xlim(0,15)+scale_linetype(name="SD",labels=c("supplier","error"))
+```
+
+```{r}
+mean(postsig$sigmaalpha > postsig$sigmaepsilon)
+```
+The probability that the supplier SD is bigger than the error SD is 0.12875.
+
+```{r}
+supp <- rstan::extract(fit2, pars="a")
+ref <- melt(supp, value.name="waste")
+ggplot(data=ref,aes(x=waste, linetype=factor(Var2)))+geom_density()+scale_linetype(name="waste",labels=LETTERS[1:5])
+```
+The density plot shows less overlap.
+
+```{r}
+mean(ref[ref[,2]==5,3]>ref[ref[,2]==1,3])
+```
+The probability that the best supplier is better than the worst supplier is 0.98975.
+
+(f).
+```{r}
+denimdata <- list(N=95, J=5, response=denim$waste, predictor=as.numeric(denim$supplier))
+fit3 <- stan(file = "C:/Users/j/Desktop/2021 Fall/STOR 557/onewayt.stan", data = denimdata)
+```
+
+```{r}
+traceplot(fit3, pars="mu", inc_warmup = TRUE)
+traceplot(fit3, pars="sigmaalpha", inc_warmup = TRUE)
+traceplot(fit3, pars="sigmaepsilon", inc_warmup = TRUE)
+```
+Sigma alphs still has large variation and does not converge.
+
+```{r}
+fit3
+```
+The mean for sigma alpha is larger and the mean for sigma epsilon is smaller.
+
+```{r}
+postsig <- extract(fit3, pars=c("sigmaalpha","sigmaepsilon"))
+ref <- melt(postsig,value.name="waste")
+ggplot(data=ref,aes(x=waste, linetype=L1)) + geom_density()+xlim(0,15)+scale_linetype(name="SD",labels=c("supplier","error"))
+```
+
+```{r}
+mean(postsig$sigmaalpha > postsig$sigmaepsilon)
+```
+The probability that the supplier SD is bigger than the error SD is 0.48975.
+
+```{r}
+supp <- rstan::extract(fit3, pars="a")
+ref <- melt(supp, value.name="waste")
+ggplot(data=ref,aes(x=waste, linetype=factor(Var2)))+geom_density()+scale_linetype(name="waste",labels=LETTERS[1:5])
+```
+The density plot shows less overlap.
+
+```{r}
+mean(ref[ref[,2]==5,3]>ref[ref[,2]==1,3])
+```
+The probability that the best supplier is better than the worst supplier is 0.99975.
+
+
+
+
+
+
+
+
+
+
+
+

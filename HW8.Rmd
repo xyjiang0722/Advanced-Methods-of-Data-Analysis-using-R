@@ -1,0 +1,213 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+Name: Xiaoyan Jiang
+
+5. 
+```{r}
+library(faraway)
+data(broccoli)
+```
+
+(a).
+```{r}
+library(ggplot2)
+ggplot(broccoli,aes(y=wt,x=grower,color=box,shape=cluster))+
+geom_point(position=position_jitter(width=0.1,height=0.0))
+```
+There is no clear difference between the three growers in terms of the weights. And the weights associated each box and each cluster are quite random, and this plot is not very informative because of the randomness.
+
+(b).
+```{r}
+library(dplyr)
+broccoli %>%
+   group_by(grower) %>% 
+   summarise_at(vars("wt"), mean)
+```
+The mean weights within growers: 358.42, 356.42 and 359.67 for grower 1, 2 and 3 respectively.
+
+```{r}
+broccoli %>%
+   group_by(box) %>% 
+   summarise_at(vars("wt"), mean)
+```
+The mean weights within boxs: 362.33, 355.78, 357.11 and 357.44 for box 1, 2, 3 and 4 respectively. But this does not make sense because in this case, box is nested in growers.
+
+
+```{r}
+broccoli %>%
+   group_by(grower, box) %>% 
+   summarise_at(vars("wt"), mean)
+```
+Above are the mean weights within boxs as nested in growers.
+
+(c).
+1. Treat grower and box (nested in growers) as random effects as they are randomly selected. In this way, I cannot add cluster as random effects nested in box because the total number of observations is 36, which is just the number of growers (3) * the number of boxes per grower (4) * the number of clusters per box (3), i.e., if I added cluster as random effects nested in box, the number of levels of each grouping factor would equal the number of observations.
+```{r}
+library(lme4)
+rem1=lmer(wt~1+(1|grower)+(1|grower:box),data=broccoli)  # grower and box (nested) as random effects
+sumary(rem1)
+```
+
+```{r}
+rem2=lmer(wt~1+(1|grower),data=broccoli)  # null model against rem1
+rem3=lmer(wt~1+(1|grower:box),data=broccoli)  # a random effects model with only the tested random effects
+library(RLRsim)
+exactRLRT(rem3,rem1,rem2)
+```
+ 
+```{r}
+library(pbkrtest)
+PBmodcomp(rem1,rem2)
+```
+From the two tests above, the difference between rem1 and rem2 is not statistically significant, so the box random effect is significant.
+
+2. Treat cluster as an random effect nested in grower (since each cluster is selected in each box independently)
+```{r}
+rem4=lmer(wt~1+(1|grower)+(1|grower:box)+(1|grower:cluster),data=broccoli)
+sumary(rem4)
+PBmodcomp(rem4,rem1)   # null model against rem4 is rem1
+```
+
+```{r}
+rem5=lmer(wt~1+(1|grower:cluster),data=broccoli)  # a random effects model with only the tested random effects
+exactRLRT(rem5,rem4,rem1)  
+```
+The difference between rem4 and rem1 is not statistically significant, so the cluster random effect is significant.
+
+3. Treat grower as an fixed effect since the mean weights do not show much variation across growers from the results in (b).
+```{r}
+fem1=lmer(wt~1+grower+(1|grower:box)+(1|grower:cluster),data=broccoli)
+sumary(fem1)
+fem2=lmer(wt~1+grower+(1|grower:box),data=broccoli) # null to test cluster random effect
+fem3=lmer(wt~1+grower+(1|grower:cluster),data=broccoli) # null to test box random effect
+
+# KRmodcomp(fem1,fem2)
+# KRmodcomp(fem1,fem3)    ## does not work here, so run simulations manually
+```
+
+```{r}
+as.numeric(2*(logLik(fem1)-logLik(fem2)))
+
+lrtstat=numeric(1000)
+for(i in 1:1000){
+  ryield=unlist(simulate(fem2))
+  fem1r=suppressMessages(refit(fem1,ryield))
+  fem2r=suppressMessages(refit(fem2,ryield))
+  lrtstat[i]=2*(logLik(fem1r)-logLik(fem2r))
+}
+
+mean(lrtstat>0)
+```
+By simulation, p value = 0.573, so grower:cluster random effects are not significant.
+
+```{r}
+as.numeric(2*(logLik(fem1)-logLik(fem3)))
+
+lrtstat=numeric(1000)
+for(i in 1:1000){
+  ryield=unlist(simulate(fem3))
+  fem1r=suppressMessages(refit(fem1,ryield))
+  fem3r=suppressMessages(refit(fem3,ryield))
+  lrtstat[i]=2*(logLik(fem1r)-logLik(fem3r))
+}
+
+mean(lrtstat>0)
+```
+By simulation, p value = 0.612, so grower:box random effects are not significant.
+
+In conclusion, there is no appropriate way to fit the data using a mixed effects model, since each predictor has zero sd as random effects. The data may not be meant to be analyzed in this way. However, for the purpose of this assignment, I choose the model based on DIC: 
+
+```{r}
+sumary(rem1)
+sumary(rem4)
+sumary(fem1)
+```
+Final model: rem1=lmer(wt~1+(1|grower)+(1|grower:box),data=broccoli), i.e., grower as random effects, box as nested random effects. The variation in weights cannot be assigned to any of the three sources.
+
+(d).
+```{r}
+null1=lmer(wt~1+(1|grower:box),data=broccoli)
+PBmodcomp(rem1,null1)
+```
+The p-value = 1, so the random effects of growers are not significant, i.e., there are no variation attributable to growers.
+
+(e).
+```{r}
+null2=lmer(wt~1+(1|grower),data=broccoli)
+PBmodcomp(rem1,null2)
+```
+The p-value = 1, so the random effects of boxes are not significant, i.e., there are no variation attributable to boxes.
+
+(f).
+```{r}
+confint(rem1,method='boot')
+```
+The confidence intervals for the SD components are (0.00, 9.63) for grower and (0.00, 7.53) for box.
+
+7. 
+```{r}
+data(semicond)
+```
+
+(a).
+```{r}
+ggplot(semicond,aes(y=resistance,x=Wafer,shape=position,color=ET))+geom_point()
+```
+The data show some upward trend in resistance from wader 1 to wader 2, and a downward trend from ward 2 to wader 3. The effects of positions and ET seem random from the plot itself, but it suggests a split plot design since we can split this plot into two subplots based on positions and ET and investigate the effects of one variable if the main plot is treated with a certain level of the other variable.
+
+(b).
+```{r}
+fmod=aov(resistance~ET*position+Wafer+Grp, semicond)
+summary(fmod)
+```
+The effects of ET and group are significant, and the effects of position and Wafer are only significant at a 5% level. This model is wrong because wafer should be regarded as random effects and so is Grp, which is the block variable.
+
+(c).
+```{r}
+spmod=lmer(resistance~1+(1|Grp:Wafer)+(1|Grp)+ET*position, semicond)
+sumary(spmod)
+```
+In this model, Wafer is an random effect, Grp as a block variable is random, and the model also includes ET and position fixed effects and an interaction term to fit the split plot design.
+
+```{r}
+VarCorr(spmod)
+```
+The relative variation within the groups is 0.32, and the variation between groups close to 0.
+
+(d).
+```{r}
+spmod1=lmer(resistance~1+(1|Grp:Wafer)+(1|Grp)+ET, semicond)
+KRmodcomp(spmod,spmod1)
+```
+The effects of positions are insignificant.
+
+(e).
+```{r}
+sumary(spmod1)
+```
+ET4 results in the highest resistance.
+```{r}
+spmod2=lmer(resistance~1+(1|Grp:Wafer)+(1|Grp)+position, semicond)
+KRmodcomp(spmod,spmod2)
+```
+It is uncertain whether ET4 is better than the second highest level, since the fixed effects of ET are not significant.
+
+(f).
+```{r}
+plot(fitted(spmod),residuals(spmod),xlab='Fitted',ylab='Residuals',pch=20)
+qqnorm(residuals(spmod),main='',pch=20)
+```
+The assumption of constant variance holds. And the QQ plot shows no major divergence from normality.
+
+
+
+
+
+
+
+
+

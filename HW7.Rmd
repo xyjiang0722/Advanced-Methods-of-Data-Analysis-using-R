@@ -1,0 +1,169 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+Name: Xiaoyan Jiang 
+
+2.
+```{r}
+library(faraway)
+data(coagulation)
+```
+
+(a).
+```{r}
+library(ggplot2)
+ggplot(coagulation,aes(x=diet,y=coag))+ geom_point(position=position_jitter(width=0.1,height=0.0))
+```
+There exists an upward trend in coagulation time from diet type A to type C, but the coagulation time drops remarkably from diet type C to D.
+
+(b).
+```{r}
+lmod=aov(coag~diet,coagulation)
+summary(lmod)
+```
+```{r}
+predict(lmod,newdata=data.frame(diet='D'))
+predict(lmod,newdata=data.frame(diet='D'), interval='prediction', level=0.95)
+```
+For a fixed effects model, the prediction of coagulation time for the response of a new animal assigned to diet D is 61, with a 95% prediction interval (55.76, 66.24).
+
+(c).
+```{r}
+library(lme4)
+mmod=lmer(coag~1+(1|diet),coagulation)
+summary(mmod)
+```
+```{r}
+predict(mmod,newdata=data.frame(diet='D'))
+```
+```{r}
+group.sd=as.data.frame(VarCorr(mmod))$sdcor[1]
+resid.sd=as.data.frame(VarCorr(mmod))$sdcor[2]
+pv=numeric(1000)
+for(i in 1:1000){
+  y=unlist(simulate(mmod,use.u=T))
+  bmod=suppressMessages(refit(mmod,y))
+  pv[i]=predict(bmod,newdata=data.frame(diet='D'))+rnorm(n=1,sd=resid.sd)
+}
+quantile(pv,c(0.025,0.5,0.975))
+```
+The prediction of coagulation time for the response of a new animal assigned to diet D is 61.17, with a 95% prediction interval (56.06, 66.54).
+
+(d).
+```{r}
+predict(mmod,re.form=~0)[1]
+group.sd=as.data.frame(VarCorr(mmod))$sdcor[1]
+resid.sd=as.data.frame(VarCorr(mmod))$sdcor[2]
+pv=numeric(1000)
+for(i in 1:1000){
+  y=unlist(simulate(mmod))
+  bmod=suppressMessages(refit(mmod,y))
+  pv[i]=predict(bmod,re.form=~0)[1]+rnorm(n=1,sd=group.sd)+rnorm(n=1,sd=resid.sd)
+}
+quantile(pv,c(0.025,0.975))
+```
+The prediction of coagulation time for the response of a new animal is 64.01, with a 95% prediction interval (54.90, 72.98).
+
+(e).
+```{r}
+group.sd=as.data.frame(VarCorr(mmod))$sdcor[1]
+resid.sd=as.data.frame(VarCorr(mmod))$sdcor[2]
+pv=numeric(1000)
+for(i in 1:1000){
+  y=unlist(simulate(mmod))
+  bmod=suppressMessages(refit(mmod,y))
+  pv[i]=predict(bmod,re.form=~0)[1]+residuals(mmod)[1]+rnorm(n=1,sd=resid.sd)
+}
+quantile(pv,c(0.025,0.5,0.975))
+```
+The prediction of coagulation time for the response of the first animal with a new diet is 64.49, with a 95% prediction interval (58.50, 70.48).
+
+
+
+3.
+```{r}
+data(eggprod)
+```
+
+(a).
+```{r}
+ggplot(eggprod,aes(y=eggs,x=treat,shape=block))+geom_point()+xlab('Treatment')
+
+ggplot(eggprod,aes(y=eggs,x=block,shape=treat))+geom_point()+xlab('Block')
+
+```
+Treatment E has the highest average numbers of eggs while teartment O has the lowest. Blocks within each treatment does not seem to have significant differences. Block 1 and 3 have relatively higher average numbers of eggs and block 2 and 4 have lower, while block 2 and 3 have higher variances within the block. Treatment E has a relatively larger number of eggs, and treatment O has less.
+
+(b).
+```{r}
+lmod2=aov(eggs~block+treat,eggprod)
+summary(lmod2)
+plot(lmod2, 1:2)
+```
+Treatment is significant at a 5% level, while block is not statistically significant. The residuals vs fitted plot shows some curvature, and the residuals are not roughly constant for each data point. The normal qq plot shows that the residuals might not be normally distributed, and observations 12, 4 and 11 may be outliers. Therefore the fixed effects model might be misspecified. 
+
+(c).
+```{r}
+mmod2=lmer(eggs~treat+(1|block),eggprod)
+sumary(mmod2)
+```
+Treatment E is best in terms of maximizing production, since treatment E is the base and the coefficients for treatment F and O are both negative. 
+
+```{r}
+amod=aov(eggs~treat+Error(block),eggprod)
+summary(amod)
+```
+We can fit the random effects model in a different way, which shows the p-value of treatment in this model. The p-value is less than 0.05, so treatment is statistically significant at a 5% level. But it is questionable whether the treatment effect is significant, so it is uncertain whether treatment E is better than other two treatments.
+
+(d).
+```{r}
+library(pbkrtest)
+mmod3=lmer(eggs~treat+(1|block),eggprod,REML=F)
+nmod=lmer(eggs~1+(1|block),eggprod,REML=F)
+KRmodcomp(mmod3,nmod)
+```
+The Kenward-Roger approximation for an F-test indicates the treatment effect is significant at a 5% level, i.e., differences between the treatments are significant. The result is the same as the fixed effects result.
+
+(e).
+```{r}
+as.numeric(2*(logLik(mmod3)-logLik(nmod)))
+```
+```{r}
+lrtstat=numeric(1000)
+for(i in 1:1000){
+  ryield=unlist(simulate(nmod))
+  nmodr=suppressMessages(refit(nmod,ryield))
+  mmodr=suppressMessages(refit(mmod3,ryield))
+  lrtstat[i]=2*(logLik(mmodr)-logLik(nmodr))
+}
+
+mean(lrtstat>8.424536)
+```
+The p-value from a bootstrap method is 0.054, which is close to the F-test result.
+
+(f).
+```{r}
+rmod=lmer(eggs~treat+(1|block),eggprod)
+nlmod=lm(eggs~treat,eggprod)
+as.numeric(2*(logLik(rmod)-logLik(nlmod,REML=T)))
+```
+```{r}
+lrtstatf=numeric(1000)
+for(i in 1:1000){
+  ryield=unlist(simulate(nlmod))
+  nlmodr=lm(ryield~treat,eggprod)
+  rmodr=suppressMessages(lmer(ryield~treat+(1|block),eggprod))
+  lrtstatf[i]=2*(logLik(rmodr)-logLik(nlmodr,REML=T))
+}
+
+mean(lrtstatf>0.5153561)
+```
+The effects of blocks are not significant, and the outcome (p-value=0.211) agree with the fixed effects result (p-value=0.2145).
+
+
+
+
+
